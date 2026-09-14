@@ -159,6 +159,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
     }
   };
 
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center space-y-4">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <Key className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-white">Přístup Odepřen</h2>
+        <p className="text-sm text-slate-400">
+          Správa systémového nastavení, API klíčů a webhooků je vyhrazena pouze pro **Hlavního Administrátora**.
+        </p>
+        <div className="pt-2 text-xs text-slate-500">
+          Jako registrováný Reseller máte plný přístup ke všem živým inzerátům, hodnocením Gemini AI a cenové matici.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Title */}

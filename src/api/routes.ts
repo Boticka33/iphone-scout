@@ -18,6 +18,7 @@ import { analyzeListingWithGemini } from '../engine/gemini';
 import { sendDiscordNotification } from '../notifications/discord';
 import { runScrapeCycle } from '../scrapers/manager';
 import { IPHONE_MODELS } from '../engine/models';
+import { adminOnly } from './auth';
 
 const router = Router();
 
@@ -97,7 +98,7 @@ router.get('/price-matrix', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/price-matrix', async (req: Request, res: Response) => {
+router.post('/price-matrix', adminOnly, async (req: Request, res: Response) => {
   try {
     const { model, capacity_gb, target_buyout_price, target_resell_price } = req.body;
     if (!model || !capacity_gb || !target_buyout_price || !target_resell_price) {
@@ -110,7 +111,7 @@ router.post('/price-matrix', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/price-matrix/:model/:capacity_gb', async (req: Request, res: Response) => {
+router.delete('/price-matrix/:model/:capacity_gb', adminOnly, async (req: Request, res: Response) => {
   try {
     await deletePriceMatrixItem(String(req.params.model), parseInt(String(req.params.capacity_gb), 10));
     res.json({ success: true, message: 'Item deleted' });
@@ -119,7 +120,7 @@ router.delete('/price-matrix/:model/:capacity_gb', async (req: Request, res: Res
   }
 });
 
-router.post('/price-matrix/sync-isniper', async (_req: Request, res: Response) => {
+router.post('/price-matrix/sync-isniper', adminOnly, async (_req: Request, res: Response) => {
   try {
     const { syncPriceMatrixFromIsniper } = await import('../engine/isniper');
     const result = await syncPriceMatrixFromIsniper();
@@ -148,7 +149,7 @@ router.get('/blacklist', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/blacklist', async (req: Request, res: Response) => {
+router.post('/blacklist', adminOnly, async (req: Request, res: Response) => {
   try {
     const { keyword, type } = req.body;
     if (!keyword) return res.status(400).json({ success: false, error: 'Keyword required' });
@@ -159,7 +160,7 @@ router.post('/blacklist', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/blacklist/:id', async (req: Request, res: Response) => {
+router.delete('/blacklist/:id', adminOnly, async (req: Request, res: Response) => {
   try {
     await removeBlacklistKeyword(parseInt(String(req.params.id), 10));
     res.json({ success: true, message: 'Keyword removed' });
@@ -168,7 +169,7 @@ router.delete('/blacklist/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/blacklist/:id/toggle', async (req: Request, res: Response) => {
+router.post('/blacklist/:id/toggle', adminOnly, async (req: Request, res: Response) => {
   try {
     const { is_active } = req.body;
     await toggleBlacklistKeyword(parseInt(String(req.params.id), 10), Boolean(is_active));
@@ -178,9 +179,9 @@ router.post('/blacklist/:id/toggle', async (req: Request, res: Response) => {
   }
 });
 
-// --- Settings API ---
+// --- Settings API (Admin Only) ---
 
-router.get('/settings', async (_req: Request, res: Response) => {
+router.get('/settings', adminOnly, async (_req: Request, res: Response) => {
   try {
     const settings = await getAllSettings();
     res.json({
@@ -198,7 +199,7 @@ router.get('/settings', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/settings', async (req: Request, res: Response) => {
+router.post('/settings', adminOnly, async (req: Request, res: Response) => {
   try {
     const newSettings = req.body;
     for (const [key, val] of Object.entries(newSettings)) {
@@ -214,7 +215,7 @@ router.post('/settings', async (req: Request, res: Response) => {
 
 // --- Utility Endpoints ---
 
-router.post('/test-discord', async (req: Request, res: Response) => {
+router.post('/test-discord', adminOnly, async (req: Request, res: Response) => {
   const { discord_webhook_url, discord_bot_token, discord_channel_id } = req.body || {};
 
   const testListing = {
@@ -263,7 +264,7 @@ router.post('/trigger-scrape', async (_req: Request, res: Response) => {
   res.json({ success: true, message: 'Scrape cycle triggered' });
 });
 
-router.post('/test-gemini', async (req: Request, res: Response) => {
+router.post('/test-gemini', adminOnly, async (req: Request, res: Response) => {
   try {
     const { gemini_api_key, gemini_model } = req.body || {};
     const apiKey = (gemini_api_key || (await getSetting('gemini_api_key')) || '').trim();

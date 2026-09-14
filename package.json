@@ -1,0 +1,35 @@
+{
+  "name": "iphone-scout",
+  "version": "1.0.0",
+  "description": "Real-time iPhone deal scout & dashboard for resellers",
+  "main": "dist/server.js",
+  "scripts": {
+    "build:server": "tsc",
+    "build:client": "cd client && npm install && npm run build",
+    "build": "npm run build:server && npm run build:client",
+    "start": "node dist/server.js",
+    "dev:server": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\""
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "axios": "^1.8.2",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "@types/sqlite3": "^3.1.11",
+    "concurrently": "^9.1.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.2"
+  }
+}

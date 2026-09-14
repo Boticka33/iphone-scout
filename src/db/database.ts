@@ -94,6 +94,18 @@ export async function initDatabase() {
       role TEXT DEFAULT 'reseller',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER PRIMARY KEY,
+      discord_webhook_url TEXT,
+      discord_bot_token TEXT,
+      discord_channel_id TEXT,
+      min_profit_alert INTEGER DEFAULT 1000,
+      gemini_api_key TEXT,
+      apify_api_token TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // Auto migrate table columns if missing
@@ -462,4 +474,95 @@ export async function deleteUser(id: number): Promise<void> {
   const db = await getDb();
   await db.run('DELETE FROM users WHERE id = ?', [id]);
 }
+
+// Per-User Settings DAO Functions
+
+export async function getUserSettings(userId: number): Promise<{
+  discord_webhook_url: string;
+  discord_bot_token: string;
+  discord_channel_id: string;
+  min_profit_alert: number;
+  gemini_api_key: string;
+  apify_api_token: string;
+}> {
+  const db = await getDb();
+  const row = await db.get('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
+  const systemSettings = await getAllSettings();
+
+  return {
+    discord_webhook_url: row?.discord_webhook_url || '',
+    discord_bot_token: row?.discord_bot_token || '',
+    discord_channel_id: row?.discord_channel_id || '',
+    min_profit_alert: row?.min_profit_alert ? Number(row.min_profit_alert) : Number(systemSettings.min_profit_alert || 1000),
+    gemini_api_key: row?.gemini_api_key || '',
+    apify_api_token: row?.apify_api_token || '',
+  };
+}
+
+export async function saveUserSettings(
+  userId: number,
+  settings: {
+    discord_webhook_url?: string;
+    discord_bot_token?: string;
+    discord_channel_id?: string;
+    min_profit_alert?: number;
+    gemini_api_key?: string;
+    apify_api_token?: string;
+  }
+) {
+  const db = await getDb();
+  await db.run(
+    `
+    INSERT INTO user_settings (user_id, discord_webhook_url, discord_bot_token, discord_channel_id, min_profit_alert, gemini_api_key, apify_api_token, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id) DO UPDATE SET
+      discord_webhook_url = COALESCE(excluded.discord_webhook_url, discord_webhook_url),
+      discord_bot_token = COALESCE(excluded.discord_bot_token, discord_bot_token),
+      discord_channel_id = COALESCE(excluded.discord_channel_id, discord_channel_id),
+      min_profit_alert = COALESCE(excluded.min_profit_alert, min_profit_alert),
+      gemini_api_key = COALESCE(excluded.gemini_api_key, gemini_api_key),
+      apify_api_token = COALESCE(excluded.apify_api_token, apify_api_token),
+      updated_at = CURRENT_TIMESTAMP
+  `,
+    [
+      userId,
+      settings.discord_webhook_url ?? null,
+      settings.discord_bot_token ?? null,
+      settings.discord_channel_id ?? null,
+      settings.min_profit_alert ?? 1000,
+      settings.gemini_api_key ?? null,
+      settings.apify_api_token ?? null,
+    ]
+  );
+}
+
+export async function getAllUserConfigs(): Promise<
+  Array<{
+    user_id: number;
+    email: string;
+    discord_webhook_url: string;
+    discord_bot_token: string;
+    discord_channel_id: string;
+    min_profit_alert: number;
+  }>
+> {
+  const db = await getDb();
+  const systemSettings = await getAllSettings();
+  const rows = await db.all(`
+    SELECT u.id as user_id, u.email,
+           us.discord_webhook_url, us.discord_bot_token, us.discord_channel_id, us.min_profit_alert
+    FROM users u
+    LEFT JOIN user_settings us ON u.id = us.user_id
+  `);
+
+  return rows.map((r: any) => ({
+    user_id: r.user_id,
+    email: r.email,
+    discord_webhook_url: r.discord_webhook_url || systemSettings.discord_webhook_url || '',
+    discord_bot_token: r.discord_bot_token || systemSettings.discord_bot_token || '',
+    discord_channel_id: r.discord_channel_id || systemSettings.discord_channel_id || '',
+    min_profit_alert: r.min_profit_alert ? Number(r.min_profit_alert) : Number(systemSettings.min_profit_alert || 1000),
+  }));
+}
+
 

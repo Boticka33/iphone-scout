@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Key, Bell, Clock, Send, CheckCircle2, AlertCircle, Globe, Users, UserPlus, Trash2 } from 'lucide-react';
+import { Settings, Key, Bell, Clock, Send, CheckCircle2, AlertCircle, Globe, Users, UserPlus, Trash2, UserCheck } from 'lucide-react';
 import axios from 'axios';
 
 interface SettingsViewProps {
@@ -7,23 +7,25 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
-  const [settings, setSettings] = useState<any>({});
-  const [loading, setLoading] = useState(true);
-  const [testingDiscord, setTestingDiscord] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Personal Settings State
+  const [myDiscordWebhookUrl, setMyDiscordWebhookUrl] = useState('');
+  const [myDiscordBotToken, setMyDiscordBotToken] = useState('');
+  const [myDiscordChannelId, setMyDiscordChannelId] = useState('');
+  const [myMinProfitAlert, setMyMinProfitAlert] = useState('1000');
+  const [myGeminiApiKey, setMyGeminiApiKey] = useState('');
 
-  // Form Inputs
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('gemini-3.8-flash');
-  const [apifyApiToken, setApifyApiToken] = useState('');
-  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
-  const [discordBotToken, setDiscordBotToken] = useState('');
-  const [discordChannelId, setDiscordChannelId] = useState('');
-  const [scrapeInterval, setScrapeInterval] = useState('30');
-  const [minProfitAlert, setMinProfitAlert] = useState('1000');
+  const [savingPersonal, setSavingPersonal] = useState(false);
+  const [personalMsg, setPersonalMsg] = useState<{ success: boolean; text: string } | null>(null);
 
-  const [testingGemini, setTestingGemini] = useState(false);
-  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testingMyDiscord, setTestingMyDiscord] = useState(false);
+  const [myDiscordTestResult, setMyDiscordTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Admin System Settings State
+  const [systemSettings, setSystemSettings] = useState<any>({});
+  const [systemGeminiApiKey, setSystemGeminiApiKey] = useState('');
+  const [systemGeminiModel, setSystemGeminiModel] = useState('gemini-3.8-flash');
+  const [systemApifyToken, setSystemApifyToken] = useState('');
+  const [systemScrapeInterval, setSystemScrapeInterval] = useState('30');
 
   // Admin User Management State
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -32,20 +34,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
   const [newUserRole, setNewUserRole] = useState<'reseller' | 'admin'>('reseller');
   const [userMsg, setUserMsg] = useState<{ success: boolean; text: string } | null>(null);
 
-  const fetchSettings = async () => {
-    setLoading(true);
+  const fetchUserSettings = async () => {
     try {
-      const res = await axios.get('/api/settings');
+      const res = await axios.get('/api/user-settings');
       if (res.data.success) {
-        setSettings(res.data.settings);
-        setScrapeInterval(res.data.settings.scrape_interval_seconds || '30');
-        setMinProfitAlert(res.data.settings.min_profit_alert || '1000');
-        setGeminiModel(res.data.settings.gemini_model || 'gemini-3.8-flash');
+        setMyDiscordWebhookUrl(res.data.settings.discord_webhook_url || '');
+        setMyDiscordBotToken(res.data.settings.discord_bot_token || '');
+        setMyDiscordChannelId(res.data.settings.discord_channel_id || '');
+        setMyMinProfitAlert(String(res.data.settings.min_profit_alert || 1000));
+        setMyGeminiApiKey(res.data.settings.gemini_api_key || '');
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchSystemSettings = async () => {
+    if (user?.role !== 'admin') return;
+    try {
+      const res = await axios.get('/api/settings');
+      if (res.data.success) {
+        setSystemSettings(res.data.settings);
+        setSystemScrapeInterval(res.data.settings.scrape_interval_seconds || '30');
+        setSystemGeminiModel(res.data.settings.gemini_model || 'gemini-3.8-flash');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -60,73 +74,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
   };
 
   useEffect(() => {
-    fetchSettings();
+    fetchUserSettings();
     if (user?.role === 'admin') {
+      fetchSystemSettings();
       fetchUsers();
     }
   }, [user]);
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
+  const handleSavePersonalSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPersonal(true);
+    setPersonalMsg(null);
+    try {
+      await axios.post('/api/user-settings', {
+        discord_webhook_url: myDiscordWebhookUrl,
+        discord_bot_token: myDiscordBotToken,
+        discord_channel_id: myDiscordChannelId,
+        min_profit_alert: parseInt(myMinProfitAlert, 10),
+        gemini_api_key: myGeminiApiKey,
+      });
+      setPersonalMsg({ success: true, text: 'Vaše osobní nastavení notifikací bylo úspěšně uloženo!' });
+    } catch (err: any) {
+      setPersonalMsg({ success: false, text: err.response?.data?.error || 'Chyba při ukládání nastavení.' });
+    } finally {
+      setSavingPersonal(false);
+    }
+  };
+
+  const handleTestMyDiscord = async () => {
+    setTestingMyDiscord(true);
+    setMyDiscordTestResult(null);
+    try {
+      const res = await axios.post('/api/test-user-discord', {
+        discord_webhook_url: myDiscordWebhookUrl,
+        discord_bot_token: myDiscordBotToken,
+        discord_channel_id: myDiscordChannelId,
+      });
+      setMyDiscordTestResult({ success: true, message: res.data.message });
+    } catch (err: any) {
+      setMyDiscordTestResult({
+        success: false,
+        message: err.response?.data?.error || 'Chyba při odesílání notifikace. Zkontrolujte váš Webhook URL.',
+      });
+    } finally {
+      setTestingMyDiscord(false);
+    }
+  };
+
+  const handleSaveSystemSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const payload: any = {
-        scrape_interval_seconds: scrapeInterval,
-        min_profit_alert: minProfitAlert,
-        gemini_model: geminiModel,
+        scrape_interval_seconds: systemScrapeInterval,
+        gemini_model: systemGeminiModel,
       };
-      if (geminiApiKey) payload.gemini_api_key = geminiApiKey;
-      if (apifyApiToken) payload.apify_api_token = apifyApiToken;
-      if (discordWebhookUrl) payload.discord_webhook_url = discordWebhookUrl;
-      if (discordBotToken) payload.discord_bot_token = discordBotToken;
-      if (discordChannelId) payload.discord_channel_id = discordChannelId;
+      if (systemGeminiApiKey) payload.gemini_api_key = systemGeminiApiKey;
+      if (systemApifyToken) payload.apify_api_token = systemApifyToken;
 
       await axios.post('/api/settings', payload);
-      alert('Nastavení úspěšně uloženo!');
-      fetchSettings();
-      setGeminiApiKey('');
-      setApifyApiToken('');
-      setDiscordWebhookUrl('');
+      alert('Systémové nastavení uloženo!');
+      fetchSystemSettings();
     } catch (err) {
-      alert('Chyba při ukládání nastavení.');
-    }
-  };
-
-  const handleTestGemini = async () => {
-    setTestingGemini(true);
-    setGeminiTestResult(null);
-    try {
-      const res = await axios.post('/api/test-gemini', {
-        gemini_api_key: geminiApiKey,
-        gemini_model: geminiModel,
-      });
-      setGeminiTestResult({ success: true, message: res.data.message });
-    } catch (err: any) {
-      setGeminiTestResult({
-        success: false,
-        message: err.response?.data?.error || 'Chyba při komunikaci s Gemini API.',
-      });
-    } finally {
-      setTestingGemini(false);
-    }
-  };
-
-  const handleTestDiscord = async () => {
-    setTestingDiscord(true);
-    setTestResult(null);
-    try {
-      const res = await axios.post('/api/test-discord', {
-        discord_webhook_url: discordWebhookUrl,
-        discord_bot_token: discordBotToken,
-        discord_channel_id: discordChannelId,
-      });
-      setTestResult({ success: true, message: res.data.message });
-    } catch (err: any) {
-      setTestResult({
-        success: false,
-        message: err.response?.data?.error || 'Chyba při odesílání notifikace. Zkontrolujte vkládanou URL adresu.',
-      });
-    } finally {
-      setTestingDiscord(false);
+      alert('Chyba při ukládání systémového nastavení.');
     }
   };
 
@@ -159,23 +168,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
     }
   };
 
-  if (user?.role !== 'admin') {
-    return (
-      <div className="max-w-2xl mx-auto py-12 text-center space-y-4">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-          <Key className="w-8 h-8" />
-        </div>
-        <h2 className="text-2xl font-bold text-white">Přístup Odepřen</h2>
-        <p className="text-sm text-slate-400">
-          Správa systémového nastavení, API klíčů a webhooků je vyhrazena pouze pro **Hlavního Administrátora**.
-        </p>
-        <div className="pt-2 text-xs text-slate-500">
-          Jako registrováný Reseller máte plný přístup ke všem živým inzerátům, hodnocením Gemini AI a cenové matici.
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Title */}
@@ -185,327 +177,278 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
             <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Nastavení Systému & Integrace</h2>
+            <h2 className="text-xl font-bold text-white">Nastavení Účtu & Notifikací</h2>
             <p className="text-sm text-slate-400">
-              Konfigurace Gemini AI klíče, Discord Bot notifikací, správy uživatelů a rychlosti skrapování.
+              Nakonfigurujte si svůj osobní Discord kanál pro příjem ziskových upozornění.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Admin User Management Section */}
-      {user?.role === 'admin' && (
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6 shadow-xl">
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Users className="w-5 h-5 text-indigo-400" />
+      {/* SECTION 1: Personal Reseller Settings */}
+      <form onSubmit={handleSavePersonalSettings} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6 shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-blue-400" />
             <div>
-              <h3 className="font-bold text-white text-base">Správa Resellerských Účtů (Admin)</h3>
-              <p className="text-xs text-slate-400">Vytvářejte a spravujte přístupové účty pro vaše klienty a resellery.</p>
+              <h3 className="font-bold text-white text-base">Moje Osobní Notifikace & Discord Bot</h3>
+              <p className="text-xs text-slate-400">Notifikace o nových výhodných inzerátech budou chodit do vašeho osobního Discordu.</p>
             </div>
           </div>
 
-          {userMsg && (
-            <div
-              className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
-                userMsg.success
-                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
-                  : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
-              }`}
-            >
-              {userMsg.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              {userMsg.text}
-            </div>
-          )}
-
-          {/* Form to add user */}
-          <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">E-mail nového uživatele</label>
-              <input
-                type="email"
-                required
-                placeholder="reseller@pro.cz"
-                value={newUserEmail}
-                onChange={(e) => setNewUserEmail(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">Heslo</label>
-              <input
-                type="password"
-                required
-                placeholder="Heslo123..."
-                value={newUserPassword}
-                onChange={(e) => setNewUserPassword(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">Role</label>
-              <select
-                value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value as 'reseller' | 'admin')}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-              >
-                <option value="reseller">Reseller (Standard)</option>
-                <option value="admin">Administrátor (Plný)</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="flex items-center justify-center gap-1.5 py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition-all h-[38px]"
-            >
-              <UserPlus className="w-4 h-4" />
-              Vytvořit Účet
-            </button>
-          </form>
-
-          {/* List of existing users */}
-          <div className="pt-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Seznam Aktivních Účtů ({usersList.length})</h4>
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {usersList.map((u) => (
-                <div key={u.id} className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800/80 rounded-xl text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${u.role === 'admin' ? 'bg-indigo-400' : 'bg-blue-400'}`} />
-                    <span className="font-semibold text-slate-200">{u.email}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'admin' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-blue-500/20 text-blue-300'}`}>
-                      {u.role.toUpperCase()}
-                    </span>
-                  </div>
-
-                  {u.id !== user.id && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteUser(u.id)}
-                      className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                      title="Smazat uživatele"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSaveSettings} className="space-y-6">
-        {/* Gemini AI Settings Card */}
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Key className="w-5 h-5 text-indigo-400" />
-              <h3 className="font-bold text-white text-base">Google Gemini AI Nastavení</h3>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleTestGemini}
-              disabled={testingGemini}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              {testingGemini ? 'Testuji...' : 'Testovat Gemini AI'}
-            </button>
-          </div>
-
-          {geminiTestResult && (
-            <div
-              className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
-                geminiTestResult.success
-                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
-                  : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
-              }`}
-            >
-              {geminiTestResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              {geminiTestResult.message}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2">
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">
-                Gemini API Key (Získejte zdarma na{' '}
-                <a
-                  href="https://aistudio.google.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-400 underline"
-                >
-                  aistudio.google.com
-                </a>
-                )
-              </label>
-              <input
-                type="password"
-                placeholder={settings.gemini_api_key_set ? '•••••••••••••••• (Nakonfigurováno)' : 'Vložte AI klíč AIzaSy...'}
-                value={geminiApiKey}
-                onChange={(e) => setGeminiApiKey(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">
-                Název Modelu AI
-              </label>
-              <input
-                type="text"
-                placeholder="gemini-2.0-flash"
-                value={geminiModel}
-                onChange={(e) => setGeminiModel(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={handleTestMyDiscord}
+            disabled={testingMyDiscord}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {testingMyDiscord ? 'Odesílám...' : 'Testovat Můj Discord'}
+          </button>
         </div>
 
-        {/* Facebook Marketplace & Apify Settings Card */}
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Globe className="w-5 h-5 text-blue-500" />
-            <div>
-              <h3 className="font-bold text-white text-base">Facebook Marketplace (Ban-Safe)</h3>
-              <p className="text-xs text-slate-400">0% risk zablokování účtu — nepoužívají se žádné osobní přihlašovací údaje.</p>
-            </div>
+        {personalMsg && (
+          <div
+            className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
+              personalMsg.success
+                ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
+            }`}
+          >
+            {personalMsg.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            {personalMsg.text}
           </div>
+        )}
 
+        {myDiscordTestResult && (
+          <div
+            className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
+              myDiscordTestResult.success
+                ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
+            }`}
+          >
+            {myDiscordTestResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            {myDiscordTestResult.message}
+          </div>
+        )}
+
+        <div className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-400 mb-1 block">
-              Apify API Token (Volitelné - pro skrapování bez blokací přes rotující proxy ze servery Apify)
-            </label>
+            <label className="text-xs font-semibold text-slate-300 mb-1 block">Možnost A: Můj Discord Webhook URL (Doporučeno)</label>
             <input
-              type="password"
-              placeholder={settings.apify_api_token_set ? '•••••••••••••••• (Nakonfigurováno)' : 'Vložte Apify token apify_api_...'}
-              value={apifyApiToken}
-              onChange={(e) => setApifyApiToken(e.target.value)}
+              type="text"
+              placeholder="https://discord.com/api/webhooks/..."
+              value={myDiscordWebhookUrl}
+              onChange={(e) => setMyDiscordWebhookUrl(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
             />
             <span className="text-[11px] text-slate-500 mt-1 block">
-              Získejte zdarma na <a href="https://apify.com/" target="_blank" rel="noreferrer" className="text-blue-400 underline">apify.com</a> (5$ volný kredit měsíčně).
+              Vložte Webhook URL z vašeho serveru na Discordu (Nastavení Kanálu $\rightarrow$ Integrace $\rightarrow$ Webhooky).
             </span>
           </div>
-        </div>
 
-        {/* Discord Bot & Webhook Settings Card */}
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Bell className="w-5 h-5 text-blue-400" />
-              <h3 className="font-bold text-white text-base">Discord Notifikace</h3>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleTestDiscord}
-              disabled={testingDiscord}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              {testingDiscord ? 'Odesílám...' : 'Testovat Discord Alert'}
-            </button>
-          </div>
-
-          {testResult && (
-            <div
-              className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
-                testResult.success
-                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
-                  : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
-              }`}
-            >
-              {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              {testResult.message}
-            </div>
-          )}
-
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
             <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">Možnost A: Discord Webhook URL (Doporučeno - Nejjednodušší)</label>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Možnost B: Můj Discord Bot Token</label>
               <input
-                type="text"
-                placeholder={settings.discord_webhook_url_set ? '•••••••• (Webhook nastaven)' : 'https://discord.com/api/webhooks/...'}
-                value={discordWebhookUrl}
-                onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                type="password"
+                placeholder="Bot Token..."
+                value={myDiscordBotToken}
+                onChange={(e) => setMyDiscordBotToken(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
-            <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-slate-800/60">
-              <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1 block">Možnost B: Discord Bot Token</label>
-                <input
-                  type="password"
-                  placeholder={settings.discord_bot_token_set ? '••••••••' : 'Bot Token...'}
-                  value={discordBotToken}
-                  onChange={(e) => setDiscordBotToken(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1 block">Discord Channel ID</label>
-                <input
-                  type="text"
-                  placeholder="ID kanálu..."
-                  value={discordChannelId}
-                  onChange={(e) => setDiscordChannelId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Scraper Timing & Profit Threshold Card */}
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Clock className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-white text-base">Frekvence a Prahové Hodnoty</h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">Frekvence kontroly (sekundy)</label>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Discord Channel ID</label>
               <input
-                type="number"
-                min="10"
-                max="300"
-                value={scrapeInterval}
-                onChange={(e) => setScrapeInterval(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                type="text"
+                placeholder="ID kanálu..."
+                value={myDiscordChannelId}
+                onChange={(e) => setMyDiscordChannelId(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">Doporučeno 15 až 30 sekund</span>
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800/60">
             <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">Min. Zisk pro Odeslání Notifikace (Kč)</label>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Můj Požadovaný Min. Zisk pro Upozornění (Kč)</label>
               <input
                 type="number"
                 step="250"
-                value={minProfitAlert}
-                onChange={(e) => setMinProfitAlert(e.target.value)}
+                value={myMinProfitAlert}
+                onChange={(e) => setMyMinProfitAlert(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">Inzeráty s nižším odhadovaným ziskem nepošlou push notifikaci do Discordu</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">Notifikace na váš Discord se pošle pouze pro inzeráty se ziskem rovným nebo vyšším než tato částka</span>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Můj Osobní Gemini API Klíč (Volitelné)</label>
+              <input
+                type="password"
+                placeholder="Vlastní AI klíč AIzaSy... (ponechte prázdné pro systémový)"
+                value={myGeminiApiKey}
+                onChange={(e) => setMyGeminiApiKey(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
             </div>
           </div>
         </div>
 
-        {/* Submit */}
         <button
           type="submit"
-          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-600/20 transition-all"
+          disabled={savingPersonal}
+          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2"
         >
-          Uložit Všechna Nastavení
+          <UserCheck className="w-4 h-4" />
+          {savingPersonal ? 'Ukládám...' : 'Uložit Moje Osobní Nastavení'}
         </button>
       </form>
+
+      {/* SECTION 2 & 3: Admin Only User Management & System Settings */}
+      {user?.role === 'admin' && (
+        <>
+          {/* Admin User Management */}
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6 shadow-xl">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Users className="w-5 h-5 text-indigo-400" />
+              <div>
+                <h3 className="font-bold text-white text-base">Správa Resellerských Účtů (Admin)</h3>
+                <p className="text-xs text-slate-400">Vytvářejte a spravujte přístupové účty pro vaše klienty a resellery.</p>
+              </div>
+            </div>
+
+            {userMsg && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
+                  userMsg.success
+                    ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                    : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
+                }`}
+              >
+                {userMsg.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                {userMsg.text}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 mb-1 block">E-mail nového uživatele</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="reseller@pro.cz"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 mb-1 block">Heslo</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Heslo123..."
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 mb-1 block">Role</label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as 'reseller' | 'admin')}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="reseller">Reseller (Standard)</option>
+                  <option value="admin">Administrátor (Plný)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="flex items-center justify-center gap-1.5 py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition-all h-[38px]"
+              >
+                <UserPlus className="w-4 h-4" />
+                Vytvořit Účet
+              </button>
+            </form>
+
+            <div className="pt-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Seznam Aktivních Účtů ({usersList.length})</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {usersList.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800/80 rounded-xl text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${u.role === 'admin' ? 'bg-indigo-400' : 'bg-blue-400'}`} />
+                      <span className="font-semibold text-slate-200">{u.email}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'admin' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                        {u.role.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {u.id !== user.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(u.id)}
+                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Smazat uživatele"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Admin System Controls */}
+          <form onSubmit={handleSaveSystemSettings} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Clock className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-bold text-white text-base">Globální Systémové Skrapování (Admin)</h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 mb-1 block">Frekvence kontroly (sekundy)</label>
+                <input
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={systemScrapeInterval}
+                  onChange={(e) => setSystemScrapeInterval(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 mb-1 block">Globální Gemini AI Model</label>
+                <input
+                  type="text"
+                  value={systemGeminiModel}
+                  onChange={(e) => setSystemGeminiModel(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all"
+            >
+              Uložit Globální Nastavení Skrapování
+            </button>
+          </form>
+        </>
+      )}
     </div>
   );
 };

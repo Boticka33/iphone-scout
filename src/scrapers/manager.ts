@@ -77,16 +77,24 @@ export async function runScrapeCycle() {
           }
         }
 
-        const shouldAlert =
-          evaluated.status !== 'ignored' &&
-          evaluated.gemini_verdict !== 'SKIP' &&
-          ((evaluated.estimated_profit && evaluated.estimated_profit >= minProfitAlert) ||
-            evaluated.gemini_verdict === 'STEAL_BUY' ||
-            evaluated.gemini_verdict === 'GOOD_DEAL');
+        if (evaluated.status !== 'ignored' && evaluated.gemini_verdict !== 'SKIP') {
+          const userConfigs = await import('../db/database').then(m => m.getAllUserConfigs());
+          for (const userConfig of userConfigs) {
+            const userThreshold = userConfig.min_profit_alert || minProfitAlert;
+            const shouldAlertUser =
+              (evaluated.estimated_profit && evaluated.estimated_profit >= userThreshold) ||
+              evaluated.gemini_verdict === 'STEAL_BUY' ||
+              evaluated.gemini_verdict === 'GOOD_DEAL';
 
-        if (shouldAlert) {
-          const sent = await sendDiscordNotification(evaluated);
-          if (sent) alertCount++;
+            if (shouldAlertUser) {
+              const sent = await sendDiscordNotification(evaluated, {
+                webhookUrl: userConfig.discord_webhook_url,
+                botToken: userConfig.discord_bot_token,
+                channelId: userConfig.discord_channel_id,
+              });
+              if (sent) alertCount++;
+            }
+          }
         }
       }
     }

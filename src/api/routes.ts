@@ -13,12 +13,14 @@ import {
   getAllSettings,
   getSetting,
   setSetting,
+  getUserSettings,
+  saveUserSettings,
 } from '../db/database';
 import { analyzeListingWithGemini } from '../engine/gemini';
 import { sendDiscordNotification } from '../notifications/discord';
 import { runScrapeCycle } from '../scrapers/manager';
 import { IPHONE_MODELS } from '../engine/models';
-import { adminOnly } from './auth';
+import { adminOnly, AuthRequest } from './auth';
 
 const router = Router();
 
@@ -179,7 +181,73 @@ router.post('/blacklist/:id/toggle', adminOnly, async (req: Request, res: Respon
   }
 });
 
-// --- Settings API (Admin Only) ---
+// --- Per-User Settings API (Every Logged-In User) ---
+
+router.get('/user-settings', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const settings = await getUserSettings(userId);
+    res.json({ success: true, settings });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/user-settings', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    await saveUserSettings(userId, req.body);
+    res.json({ success: true, message: 'Osobní nastavení úspěšně uloženo.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/test-user-discord', async (req: AuthRequest, res: Response) => {
+  const { discord_webhook_url, discord_bot_token, discord_channel_id } = req.body || {};
+
+  const testListing = {
+    external_id: 'test-123',
+    source: 'bazos' as const,
+    title: 'TEST: iPhone 15 Pro 128GB Zánovní záruka',
+    price: 16500,
+    description: 'Testovací notifikace z vašeho osobního iPhone Scout účtu.',
+    url: 'https://mobil.bazos.cz/',
+    image_url: 'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/iphone-15-pro-finish-select-202309-6-1inch-naturaltitanium?wid=5120&hei=2880&fmt=p-jpg',
+    location: 'Praha 1',
+    model: 'iPhone 15 Pro',
+    capacity_gb: 128,
+    estimated_value: 21500,
+    estimated_profit: 5000,
+    score: 85,
+    gemini_verdict: 'STEAL_BUY' as const,
+    gemini_summary: 'Testovací zpráva pro váš osobní Discord kanál.',
+  };
+
+  try {
+    const success = await sendDiscordNotification(testListing, {
+      webhookUrl: discord_webhook_url,
+      botToken: discord_bot_token,
+      channelId: discord_channel_id,
+    });
+
+    if (success) {
+      res.json({ success: true, message: 'Notifikace byla úspěšně odeslána na váš osobní Discord!' });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Nebyl zadán platný Discord Webhook URL ani Bot Token s Channel ID.',
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message || 'Chyba při komunikaci s Discord API.',
+    });
+  }
+});
+
+// --- System Settings API (Admin Only) ---
 
 router.get('/settings', adminOnly, async (_req: Request, res: Response) => {
   try {

@@ -8,18 +8,23 @@ import fs from 'fs';
 import { initDatabase } from './db/database';
 import { startScraperManager } from './scrapers/manager';
 import apiRoutes from './api/routes';
+import authRouter, { authMiddleware } from './api/auth';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 async function startServer() {
-  console.log('[Server] Initializing SQLite database...');
+  console.log('[Server] Initializing database...');
   await initDatabase();
 
   app.use(cors());
   app.use(express.json());
 
-  app.use('/api', apiRoutes);
+  // Public auth routes
+  app.use('/api/auth', authRouter);
+
+  // Protected API routes
+  app.use('/api', authMiddleware, apiRoutes);
 
   const clientDistPath = path.join(process.cwd(), 'client', 'dist');
   if (fs.existsSync(clientDistPath)) {

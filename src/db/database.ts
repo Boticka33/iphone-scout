@@ -2,7 +2,8 @@ import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
 import fs from 'fs';
-import { Listing, PriceMatrixItem, BlacklistItem } from '../types';
+import bcrypt from 'bcryptjs';
+import { Listing, PriceMatrixItem, BlacklistItem, User } from '../types';
 import { DEFAULT_PRICE_MATRIX, DEFAULT_BLACKLIST_KEYWORDS } from '../engine/models';
 
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'scout.db');
@@ -85,6 +86,14 @@ export async function initDatabase() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'reseller',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Auto migrate table columns if missing
@@ -93,6 +102,16 @@ export async function initDatabase() {
   try { await db.exec('ALTER TABLE price_matrix ADD COLUMN buyout_b INTEGER DEFAULT 0;'); } catch (e) {}
   try { await db.exec('ALTER TABLE price_matrix ADD COLUMN buyout_c INTEGER DEFAULT 0;'); } catch (e) {}
   try { await db.exec('ALTER TABLE price_matrix ADD COLUMN buyout_d INTEGER DEFAULT 0;'); } catch (e) {}
+
+  // Seed default Admin user if empty
+  const countUsers = await db.get('SELECT COUNT(*) as count FROM users');
+  if (!countUsers || countUsers.count === 0) {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@iphonescout.cz';
+    const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
+    const hash = await bcrypt.hash(adminPass, 10);
+    await db.run('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)', [adminEmail.toLowerCase().trim(), hash, 'admin']);
+    console.log(`Initialized default admin user (${adminEmail}).`);
+  }
 
   // Seed default price matrix if empty
   const countMatrix = await db.get('SELECT COUNT(*) as count FROM price_matrix');
@@ -412,3 +431,35 @@ export async function getAllSettings(): Promise<Record<string, string>> {
   }
   return settings;
 }
+
+// User DAO Functions
+
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const db = await getDb();
+  return (await db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()])) as User | undefined;
+}
+
+export async function getUserById(id: number): Promise<User | undefined> {
+  const db = await getDb();
+  return (await db.get('SELECT id, email, role, created_at FROM users WHERE id = ?', [id])) as User | undefined;
+}
+
+export async function createUser(email: string, passwordHash: string, role: 'admin' | 'reseller' = 'reseller'): Promise<number> {
+  const db = await getDb();
+  const result = await db.run(
+    'INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)',
+    [email.toLowerCase().trim(), passwordHash, role]
+  );
+  return Number(result.lastID);
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  const db = await getDb();
+  return (await db.all('SELECT id, email, role, created_at FROM users ORDER BY created_at DESC')) as User[];
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  const db = await getDb();
+  await db.run('DELETE FROM users WHERE id = ?', [id]);
+}
+

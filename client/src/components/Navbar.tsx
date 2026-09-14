@@ -7,6 +7,8 @@ interface NavbarProps {
   onTriggerScrape: () => void;
   isScraping: boolean;
   stealBuyCount: number;
+  user?: { email: string; role: 'admin' | 'reseller' } | null;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTriggerScrape,
   isScraping,
   stealBuyCount,
+  user,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
@@ -92,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </nav>
 
-          {/* Quick Action Button */}
+          {/* User Profile & Actions */}
           <div className="flex items-center gap-3">
             <button
               onClick={onTriggerScrape}
@@ -103,6 +107,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isScraping ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">{isScraping ? 'Skrapuji...' : 'Scoutovat Hned'}</span>
             </button>
+
+            {user && (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+                <span className="hidden lg:inline-block text-xs font-medium text-slate-300">
+                  {user.email}
+                </span>
+                <button
+                  onClick={onLogout}
+                  className="px-2.5 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded-lg transition-colors"
+                  title="Odhlásit se z účtu"
+                >
+                  Odhlásit
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -81,3 +81,11 @@ export interface ScraperResult {
     published_at?: string;
   }>;
 }
+
+export interface User {
+  id?: number;
+  email: string;
+  password_hash?: string;
+  role: 'admin' | 'reseller';
+  created_at?: string;
+}

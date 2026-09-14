@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Key, Bell, Clock, DollarSign, Send, CheckCircle2, AlertCircle, Globe } from 'lucide-react';
+import { Settings, Key, Bell, Clock, Send, CheckCircle2, AlertCircle, Globe, Users, UserPlus, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
-export const SettingsView: React.FC = () => {
+interface SettingsViewProps {
+  user?: { id: number; email: string; role: 'admin' | 'reseller' } | null;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [testingDiscord, setTestingDiscord] = useState(false);
@@ -21,6 +25,13 @@ export const SettingsView: React.FC = () => {
   const [testingGemini, setTestingGemini] = useState(false);
   const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Admin User Management State
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'reseller' | 'admin'>('reseller');
+  const [userMsg, setUserMsg] = useState<{ success: boolean; text: string } | null>(null);
+
   const fetchSettings = async () => {
     setLoading(true);
     try {
@@ -38,9 +49,22 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    if (user?.role !== 'admin') return;
+    try {
+      const res = await axios.get('/api/auth/users');
+      setUsersList(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
-  }, []);
+    if (user?.role === 'admin') {
+      fetchUsers();
+    }
+  }, [user]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +130,35 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserEmail || !newUserPassword) return;
+    setUserMsg(null);
+    try {
+      await axios.post('/api/auth/users', {
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
+      });
+      setUserMsg({ success: true, text: `Účet ${newUserEmail} byl úspěšně vytvořen!` });
+      setNewUserEmail('');
+      setNewUserPassword('');
+      fetchUsers();
+    } catch (err: any) {
+      setUserMsg({ success: false, text: err.response?.data?.error || 'Chyba při vytváření uživatele.' });
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    if (!window.confirm('Opravdu chcete smazat tento uživatelský účet?')) return;
+    try {
+      await axios.delete(`/api/auth/users/${id}`);
+      fetchUsers();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Chyba při mazání uživatele.');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Title */}
@@ -117,11 +170,113 @@ export const SettingsView: React.FC = () => {
           <div>
             <h2 className="text-xl font-bold text-white">Nastavení Systému & Integrace</h2>
             <p className="text-sm text-slate-400">
-              Konfigurace Gemini AI klíče, Discord Bot notifikací a rychlosti skrapování.
+              Konfigurace Gemini AI klíče, Discord Bot notifikací, správy uživatelů a rychlosti skrapování.
             </p>
           </div>
         </div>
       </div>
+
+      {/* Admin User Management Section */}
+      {user?.role === 'admin' && (
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6 shadow-xl">
+          <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+            <Users className="w-5 h-5 text-indigo-400" />
+            <div>
+              <h3 className="font-bold text-white text-base">Správa Resellerských Účtů (Admin)</h3>
+              <p className="text-xs text-slate-400">Vytvářejte a spravujte přístupové účty pro vaše klienty a resellery.</p>
+            </div>
+          </div>
+
+          {userMsg && (
+            <div
+              className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
+                userMsg.success
+                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                  : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
+              }`}
+            >
+              {userMsg.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              {userMsg.text}
+            </div>
+          )}
+
+          {/* Form to add user */}
+          <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="text-xs font-semibold text-slate-400 mb-1 block">E-mail nového uživatele</label>
+              <input
+                type="email"
+                required
+                placeholder="reseller@pro.cz"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-400 mb-1 block">Heslo</label>
+              <input
+                type="password"
+                required
+                placeholder="Heslo123..."
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-400 mb-1 block">Role</label>
+              <select
+                value={newUserRole}
+                onChange={(e) => setNewUserRole(e.target.value as 'reseller' | 'admin')}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              >
+                <option value="reseller">Reseller (Standard)</option>
+                <option value="admin">Administrátor (Plný)</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              className="flex items-center justify-center gap-1.5 py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition-all h-[38px]"
+            >
+              <UserPlus className="w-4 h-4" />
+              Vytvořit Účet
+            </button>
+          </form>
+
+          {/* List of existing users */}
+          <div className="pt-2">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Seznam Aktivních Účtů ({usersList.length})</h4>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {usersList.map((u) => (
+                <div key={u.id} className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800/80 rounded-xl text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${u.role === 'admin' ? 'bg-indigo-400' : 'bg-blue-400'}`} />
+                    <span className="font-semibold text-slate-200">{u.email}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'admin' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                      {u.role.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {u.id !== user.id && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUser(u.id)}
+                      className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="Smazat uživatele"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSaveSettings} className="space-y-6">
         {/* Gemini AI Settings Card */}

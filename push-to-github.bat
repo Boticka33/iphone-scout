@@ -1,37 +1,33 @@
 @echo off
-chcp 65001 > nul
-title iPhone Scout - GitHub Uploader
 echo ========================================================
-echo    iPhone Scout - Automatický Upload na GitHub
+echo   iPhone Scout - Automatic GitHub Uploader
 echo ========================================================
 echo.
-echo Tento skript obchází limit 100 souborů ve webovém uploaderu GitHubu.
-echo.
-set /p REPO_URL="Vložte URL vášho repozitáře z GitHubu (např. https://github.com/jmeno/iphone-scout.git): "
+set /p REPO_URL="Vlozte URL vaseho GitHub repozitare [Enter pro default: https://github.com/Boticka33/iphone-scout.git]: "
 
 if "%REPO_URL%"=="" (
-    echo [CHYBA] Nebyla zadána žádná URL adresa.
-    pause
-    exit /b
+    set REPO_URL=https://github.com/Boticka33/iphone-scout.git
 )
 
 echo.
-echo [1/4] Inicializuji Git repozitář...
+echo [1/4] Inicializuji Git...
 git init
 
-echo [2/4] Přidávám soubory ze složky alpha...
+echo [2/4] Pridavam soubory...
 git add .
 
-echo [3/4] Vytvářím prvotní commit...
-git commit -m "Deploy iphone-scout project"
+echo [3/4] Vytvarim commit...
+git config user.email "user@example.com"
+git config user.name "User"
+git commit -m "Initial commit for iphone-scout"
 
-echo [4/4] Propojuji s %REPO_URL% a odesílám...
+echo [4/4] Odesilam na GitHub (%REPO_URL%)...
 git branch -M main
 git remote add origin %REPO_URL%
 git push -u origin main
 
 echo.
 echo ========================================================
-echo    HOTOVO! Projekt byl úspěšně nahrán na váš GitHub!
+echo   HOTOVO! Projekt byl uspesne nahran na vas GitHub!
 echo ========================================================
 pause
